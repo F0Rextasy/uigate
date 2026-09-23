@@ -1,0 +1,697 @@
+#!/usr/bin/env python3
+"""uigate -- gate local HTML/CSS for measurable UI defects and AI-template tells.
+
+Objective rules (fail): WCAG contrast ratios computed from literal colors,
+missing :focus styles, missing/empty <img> alt text, interactive targets
+below 40px where dimensions are literal, text below 12px.
+"""
+
+import argparse
+import bisect
+import html
+import json
+import os
+import re
+import sys
+from html.parser import HTMLParser
+
+RULES = {
+    "low-contrast": (
+        "fail",
+        "raise the contrast (darker text, lighter background, or larger type)"),
+    "missing-focus-style": (
+        "fail",
+        "add a :focus-visible rule so keyboard users can see where they are"),
+    "missing-alt": (
+        "fail",
+        "write a non-empty alt describing the image (decorative images "
+        "should be CSS backgrounds, not <img>)"),
+    "small-target": (
+        "fail",
+        "grow the target to at least 40x40px so it is tappable"),
+    "small-text": (
+        "fail",
+        "grow body copy to at least 12px"),
+    "ai-gradient": (
+        "warn",
+        "an indigo/violet linear gradient is the single most common "
+        "AI-template tell -- pick a deliberate brand palette"),
+    "system-font-only": (
+        "warn",
+        "ship a custom @font-face or an explicit font link instead of the "
+        "default Inter/system-ui stack"),
+    "card-grid": (
+        "warn",
+        "vary radii/shadows/elevation instead of repeating one card token"),
+    "emoji-heading": (
+        "warn",
+        "drop the emoji from the heading -- it reads as generated filler"),
+    "hero-boilerplate": (
+        "warn",
+        "replace the template phrase with copy that says what this page does"),
+    "hardcoded-palette": (
+        "warn",
+        "move colors into custom properties so the palette is a decision, "
+        "not an accident"),
+}
+
+# The specific indigo/violet stops every template ships (6-digit hex).
+AI_PALETTE = {"6366f1", "8b5cf6", "a855f7", "d946ef", "7c3aed", "4f46e5"}
+
+# Generic hero copy, matched case-insensitively against stripped text lines.
+BOILERPLATE = ("get started", "unlock the power of",
+               "supercharge your", "lorem ipsum")
+
+NAMED_COLORS = {
+    "black": "000000", "white": "ffffff", "red": "ff0000",
+    "lime": "00ff00", "blue": "0000ff", "yellow": "ffff00",
+    "cyan": "00ffff", "aqua": "00ffff", "magenta": "ff00ff",
+    "fuchsia": "ff00ff", "silver": "c0c0c0", "gray": "808080",
+    "grey": "808080", "maroon": "800000", "olive": "808000",
+    "green": "008000", "purple": "800080", "teal": "008080",
+    "navy": "000080", "orange": "ffa500", "pink": "ffc0cb",
+    "brown": "a52a2a", "gold": "ffd700", "indigo": "4b0082",
+    "violet": "ee82ee", "beige": "f5f5dc", "ivory": "fffff0",
+    "khaki": "f0e68c", "lavender": "e6e6fa", "salmon": "fa8072",
+    "coral": "ff7f50", "crimson": "dc143c", "slate": "708090",
+    "charcoal": "36454f", "cream": "fffdd0", "mint": "98ff98",
+}
+
+BOLD = "\033[1m"
+RED = "\033[31m"
+YELLOW = "\033[33m"
+RESET = "\033[0m"
+
+HEX_RE = re.compile(r"#([0-9a-fA-F]{3,8})\b")
+RGB_RE = re.compile(
+    r"rgba?\(\s*([0-9]{1,3}%?)\s*,\s*([0-9]{1,3}%?)\s*,\s*([0-9]{1,3}%?)"
+    r"(?:\s*,\s*[0-9.]+\s*)?\)", re.IGNORECASE)
+NAMED_RE = re.compile(
+    r"\b(%s)\b" % "|".join(sorted(NAMED_COLORS, key=len, reverse=True)),
+    re.IGNORECASE)
+STYLE_BLOCK_RE = re.compile(r"<style\b[^>]*>(.*?)</style\s*>",
+                            re.IGNORECASE | re.DOTALL)
+HEADING_RE = re.compile(r"<h([12])\b[^>]*>(.*?)</h\1\s*>",
+                        re.IGNORECASE | re.DOTALL)
+TAG_RE = re.compile(r"<[^>]*>")
+EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF]")
+DECL_RE = re.compile(r"([a-zA-Z][a-zA-Z-]*)\s*:\s*([^;{}]+);?")
+BLOCK_RE = re.compile(r"([^{}]+)\{([^{}]*)\}")
+SIZE_RE = re.compile(r"^\s*([0-9]+(?:\.[0-9]+)?)\s*(px|pt)\s*$",
+                     re.IGNORECASE)
+COMMENT_RE = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+
+def paint(text, *codes, color=True):
+    if not color:
+        return text
+    return "".join(codes) + text + RESET
+
+
+def expand_hex(token):
+    token = token.lower()
+    if len(token) in (3, 4):
+        token = "".join(c * 2 for c in token[:3])
+    elif len(token) == 8:
+        token = token[:6]
+    if len(token) != 6:
+        return None
+    return token
+
+
+def channel(value):
+    if value.endswith("%"):
+        value = float(value[:-1]) * 255.0 / 100.0
+    else:
+        value = float(value)
+    return min(255, max(0, int(round(value))))
+
+
+def parse_color(text):
+    """Literal CSS color -> (r, g, b) or None. Alpha is ignored."""
+    text = text.strip().lower()
+    if text.startswith("#"):
+        hexpart = expand_hex(text[1:])
+        if hexpart is None:
+            return None
+        try:
+            return tuple(int(hexpart[i:i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            return None
+    match = RGB_RE.fullmatch(text)
+    if match:
+        return tuple(channel(match.group(i)) for i in (1, 2, 3))
+    if text in NAMED_COLORS:
+        hexpart = NAMED_COLORS[text]
+        return tuple(int(hexpart[i:i + 2], 16) for i in (0, 2, 4))
+    return None
+
+
+def relative_luminance(rgb):
+    def linearize(channel):
+        channel = channel / 255.0
+        if channel <= 0.03928:
+            return channel / 12.92
+        return ((channel + 0.055) / 1.055) ** 2.4
+    red, green, blue = (linearize(c) for c in rgb)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def contrast_ratio(foreground, background):
+    lighter = max(relative_luminance(foreground),
+                  relative_luminance(background))
+    darker = min(relative_luminance(foreground),
+                 relative_luminance(background))
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def format_ratio(ratio):
+    return "%.2f:1" % ratio
+
+
+def make_liner(text):
+    starts = [0]
+    for match in re.finditer("\n", text):
+        starts.append(match.end())
+
+    def line_at(offset):
+        return bisect.bisect_right(starts, offset)
+
+    return line_at
+
+
+def mask_comments(css):
+    return COMMENT_RE.sub(
+        lambda match: re.sub(r"[^\n]", " ", match.group(0)), css)
+
+
+def iter_blocks(css):
+    """Yield (body, body_start_offset); braces matched on comment-masked CSS
+    so commented braces cannot desync the parse, slices taken from the raw
+    text so values stay intact."""
+    masked = mask_comments(css)
+    for match in BLOCK_RE.finditer(masked):
+        start, end = match.span(2)
+        yield css[start:end], start
+
+
+def parse_decls(body, base_offset, liner):
+    """Yield (name, value, line) for each declaration in a block body."""
+    for match in DECL_RE.finditer(body):
+        yield (match.group(1).lower(), match.group(2).strip(),
+               liner(base_offset + match.start()))
+
+
+def font_size_px(value):
+    match = SIZE_RE.match(value)
+    if not match:
+        return None
+    size = float(match.group(1))
+    if match.group(2).lower() == "pt":
+        size = size * 96.0 / 72.0
+    return size
+
+
+def is_bold(value):
+    value = value.strip().lower()
+    if value in ("bold", "bolder"):
+        return True
+    return value.isdigit() and int(value) >= 700
+
+
+def hexes_in_value(value):
+    """Every literal color in a declaration value, normalized to 6-hex."""
+    found = []
+    for match in HEX_RE.finditer(value):
+        hexpart = expand_hex(match.group(1))
+        if hexpart is not None:
+            found.append(hexpart)
+    for match in RGB_RE.finditer(value):
+        found.append("%02x%02x%02x" % tuple(
+            channel(match.group(i)) for i in (1, 2, 3)))
+    return found
+
+
+def first_color_in_value(value):
+    """Earliest literal color in a shorthand value (background: ...)."""
+    best = None
+
+    def consider(match, rgb):
+        nonlocal best
+        if best is None or match.start() < best[0]:
+            best = (match.start(), match.group(0).strip(), rgb)
+
+    for match in HEX_RE.finditer(value):
+        rgb = parse_color(match.group(0))
+        if rgb is not None:
+            consider(match, rgb)
+    for match in RGB_RE.finditer(value):
+        consider(match, tuple(channel(match.group(i)) for i in (1, 2, 3)))
+    for match in NAMED_RE.finditer(value):
+        consider(match, parse_color(match.group(1)))
+    if best is None:
+        return None, None
+    return best[2], best[1]
+
+
+class Page(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.imgs = []
+        self.interactive = []
+        self.inline_styles = []
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        name = tag.lower()
+        props = {}
+        for key, value in attrs:
+            props[key.lower()] = "" if value is None else value
+        line, _ = self.getpos()
+        if name == "img":
+            self.imgs.append((line, props))
+        if name in ("button", "a", "input", "select", "textarea"):
+            if name == "input" and props.get("type", "").lower() == "hidden":
+                pass
+            else:
+                self.interactive.append((name, line, props))
+        if props.get("style", "").strip():
+            self.inline_styles.append((name, line, props["style"]))
+        if name == "link":
+            self.links.append(props)
+
+
+def style_blocks(text):
+    """Yield (content, content_start_offset) for each <style> block."""
+    for match in STYLE_BLOCK_RE.finditer(text):
+        yield match.group(1), match.start(1)
+
+
+def add(rows, rel, line, rule, measured, threshold, detail):
+    severity, suggestion = RULES[rule]
+    rows.append({"file": rel, "line": line, "rule": rule,
+                 "severity": severity, "measured": measured,
+                 "threshold": threshold,
+                 "message": "%s -- %s" % (detail, suggestion),
+                 "suggestion": suggestion})
+
+
+def check_contrast_block(rows, rel, line, decls):
+    foreground = decls.get("color")
+    if foreground is None:
+        return
+    foreground_rgb = parse_color(foreground)
+    if foreground_rgb is None:
+        return  # var() or unknown -- never vibes, skip what we cannot resolve
+    background = decls.get("background-color")
+    background_token = background
+    if background is not None:
+        background_rgb = parse_color(background)
+    else:
+        background_rgb, background_token = first_color_in_value(
+            decls.get("background", ""))
+    if background_rgb is None:
+        background_rgb = (255, 255, 255)
+        background_token = "#ffffff (assumed)"
+    size = (font_size_px(decls["font-size"])
+            if "font-size" in decls else None)
+    large = (size is not None
+             and (size >= 24 or (size >= 18.66
+                                 and is_bold(decls.get("font-weight", "")))))
+    threshold = "3:1" if large else "4.5:1"
+    limit = 3.0 if large else 4.5
+    ratio = contrast_ratio(foreground_rgb, background_rgb)
+    if ratio < limit:
+        add(rows, rel, line, "low-contrast", format_ratio(ratio), threshold,
+            "%s on %s%s" % (foreground, background_token,
+                             " (large text)" if large else ""))
+
+
+def check_text_size(rows, rel, line, decls):
+    if "font-size" not in decls:
+        return
+    size = font_size_px(decls["font-size"])
+    if size is not None and size < 12:
+        add(rows, rel, line, "small-text", decls["font-size"], "min 12px",
+            "font-size %s renders below readable minimum" % decls["font-size"])
+
+
+def check_gradient(rows, rel, line, name, value):
+    if "gradient" not in value.lower():
+        return
+    stops = sorted(set(hexes_in_value(value)) & AI_PALETTE)
+    if len(stops) >= 2:
+        add(rows, rel, line, "ai-gradient", " + ".join("#" + s for s in stops),
+            "no purple-indigo gradient",
+            "%s template gradient" % value[:80])
+
+
+def dimension_px(token):
+    match = SIZE_RE.match(token)
+    if match and match.group(2).lower() == "px":
+        return float(match.group(1))
+    if re.fullmatch(r"\s*[0-9]+(?:\.[0-9]+)?\s*", token):
+        return float(token.strip())
+    return None
+
+def target_size(tag, props):
+    """Smallest literal width/height in px, or None when unmeasurable."""
+    sizes = []
+    for name, value, _line in parse_decls(props.get("style", ""), 0,
+                                           lambda offset: 0):
+        if name in ("width", "height"):
+            pixels = dimension_px(value)
+            if pixels is not None:
+                sizes.append(pixels)
+    for attr in ("width", "height"):
+        if attr in props and props[attr].strip():
+            pixels = dimension_px(props[attr])
+            if pixels is not None:
+                sizes.append(pixels)
+    if not sizes:
+        return None
+    return min(sizes)
+
+
+def audit_decls(rows, rel, line, style_text):
+    decls = {}
+    for name, value, decl_line in parse_decls(style_text, 0,
+                                              lambda offset: line):
+        decls.setdefault(name, value)
+        check_text_size(rows, rel, line, {name: value})
+        check_gradient(rows, rel, line, name, value)
+    if decls:
+        check_contrast_block(rows, rel, line, decls)
+    return decls
+
+
+def audit_css_text(rows, rel, css_text, base_line, liner):
+    radii = {}
+    shadows = {}
+    for body, offset in iter_blocks(css_text):
+        decls = {}
+        for name, value, line in parse_decls(body, offset, liner):
+            decls.setdefault(name, value)
+            check_text_size(rows, rel, line, {name: value})
+            check_gradient(rows, rel, line, name, value)
+            if name == "border-radius":
+                key = re.sub(r"\s+", " ", value.lower())
+                radii.setdefault(key, []).append(line)
+            if name == "box-shadow":
+                key = re.sub(r"\s+", " ", value.lower())
+                shadows.setdefault(key, []).append(line)
+        if decls:
+            color_line = liner(offset)
+            for name, value, line in parse_decls(body, offset, liner):
+                if name == "color":
+                    color_line = line
+                    break
+            check_contrast_block(rows, rel, color_line, decls)
+    return radii, shadows
+
+
+def audit_html(path, rel, text, rows, css_cache):
+    liner = make_liner(text)
+    page = Page()
+    page.feed(text)
+
+    css_texts = []
+    for content, offset in style_blocks(text):
+        css_texts.append((content, make_liner(text)(offset)))
+    for link in page.links:
+        if link.get("rel", "").lower() != "stylesheet":
+            continue
+        href = link.get("href", "").strip()
+        if not href or "://" in href or href.startswith(("data:", "#")):
+            continue
+        candidate = os.path.normpath(
+            os.path.join(os.path.dirname(path), href.split("#")[0]))
+        if candidate in css_cache:
+            css_texts.append((css_cache[candidate], 1))
+        elif os.path.isfile(candidate):
+            try:
+                with open(candidate, encoding="utf-8",
+                          errors="replace") as handle:
+                    css_cache[candidate] = handle.read()
+                css_texts.append((css_cache[candidate], 1))
+            except OSError:
+                pass
+
+    has_css = any(content.strip() for content, _ in css_texts)
+    if has_css and ":focus" not in "\n".join(
+            content for content, _ in css_texts).lower():
+        add(rows, rel, 1, "missing-focus-style", "0 focus selectors",
+            ">=1 (:focus-visible)", "no :focus rule in page CSS")
+
+    for line, props in page.imgs:
+        if "alt" not in props:
+            add(rows, rel, line, "missing-alt", "no alt attribute",
+                "non-empty alt", "<img> without alt text")
+        elif not props["alt"].strip():
+            add(rows, rel, line, "missing-alt", 'alt=""', "non-empty alt",
+                "<img> with empty alt text")
+
+    for tag, line, props in page.interactive:
+        smallest = target_size(tag, props)
+        if smallest is not None and smallest < 40:
+            add(rows, rel, line, "small-target", "%gpx" % smallest,
+                "min 40px", "<%s> target %gpx is not tappable"
+                % (tag, smallest))
+
+    for _, line, style in page.inline_styles:
+        audit_decls(rows, rel, line, style)
+
+    radii = {}
+    shadows = {}
+    font_families = []
+    for content, base in css_texts:
+        block_radii, block_shadows = audit_css_text(
+            rows, rel, content, base,
+            lambda offset, _base=base, _text=content:
+            _base + _text.count("\n", 0, offset))
+        for key, lines in block_radii.items():
+            radii.setdefault(key, []).extend(lines)
+        for key, lines in block_shadows.items():
+            shadows.setdefault(key, []).extend(lines)
+        for body, offset in iter_blocks(content):
+            for name, value, _ in parse_decls(
+                    body, offset, lambda o: base):
+                if name == "font-family":
+                    font_families.append(value)
+
+    for _, line, style in page.inline_styles:
+        for name, value, _ in parse_decls(style, 0, lambda offset: line):
+            if name == "border-radius":
+                radii.setdefault(
+                    re.sub(r"\s+", " ", value.lower()), []).append(line)
+            if name == "box-shadow":
+                shadows.setdefault(
+                    re.sub(r"\s+", " ", value.lower()), []).append(line)
+
+    repeated_radius = [(key, len(lines)) for key, lines in radii.items()
+                       if len(lines) >= 3]
+    repeated_shadow = [(key, len(lines)) for key, lines in shadows.items()
+                       if len(lines) >= 3]
+    if repeated_radius and repeated_shadow:
+        key_r, count_r = sorted(repeated_radius)[0]
+        key_s, count_s = sorted(repeated_shadow)[0]
+        add(rows, rel, 1, "card-grid",
+            "border-radius:%s x%d + box-shadow:%s x%d"
+            % (key_r, count_r, key_s, count_s),
+            "<3 identical repeats",
+            "uniform card grid repeats one token")
+    css_all = "\n".join(content for content, _ in css_texts)
+    stacked = " ".join(font_families).lower()
+    has_custom_face = ("@font-face" in css_all.lower()
+                       or any("font" in link.get("href", "").lower()
+                              for link in page.links))
+    if ("inter" in stacked or "system-ui" in stacked) and not has_custom_face:
+        add(rows, rel, 1, "system-font-only", font_families[0],
+            "custom @font-face", "default Inter/system-ui stack, no font face")
+
+    for match in HEADING_RE.finditer(text):
+        inner = html.unescape(TAG_RE.sub(" ", match.group(2)))
+        emojis = EMOJI_RE.findall(inner)
+        if emojis:
+            add(rows, rel, liner(match.start()), "emoji-heading",
+                "".join(dict.fromkeys(emojis)), "no emoji in headings",
+                "<h%s> %s" % (match.group(1), " ".join(inner.split())[:60]))
+
+    for number, raw in enumerate(text.split("\n"), 1):
+        stripped = html.unescape(TAG_RE.sub(" ", raw))
+        lowered = stripped.lower()
+        for phrase in BOILERPLATE:
+            if phrase in lowered:
+                add(rows, rel, number, "hero-boilerplate", '"%s"' % phrase,
+                    "original copy",
+                    "template copy: %s" % " ".join(stripped.split())[:80])
+
+    masked = mask_comments(css_all)
+    literals = len(HEX_RE.findall(masked)) + len(RGB_RE.findall(masked))
+    for _, _, style in page.inline_styles:
+        literals += len(HEX_RE.findall(style)) + len(RGB_RE.findall(style))
+    variables = css_all.lower().count("var(")
+    if literals >= 3 and variables == 0 and has_css:
+        add(rows, rel, 1, "hardcoded-palette",
+            "%d literal colors, 0 var()" % literals, ">=1 var(--*)",
+            "palette is fully hardcoded")
+
+
+def audit_css_file(path, rel, text, rows):
+    liner = make_liner(text)
+    if text.strip() and ":focus" not in text.lower():
+        add(rows, rel, 1, "missing-focus-style", "0 focus selectors",
+            ">=1 (:focus-visible)", "no :focus rule in stylesheet")
+    radii, shadows = audit_css_text(rows, rel, text, 1, liner)
+    repeated_radius = [(key, len(lines)) for key, lines in radii.items()
+                       if len(lines) >= 3]
+    repeated_shadow = [(key, len(lines)) for key, lines in shadows.items()
+                       if len(lines) >= 3]
+    if repeated_radius and repeated_shadow:
+        key_r, count_r = sorted(repeated_radius)[0]
+        key_s, count_s = sorted(repeated_shadow)[0]
+        add(rows, rel, 1, "card-grid",
+            "border-radius:%s x%d + box-shadow:%s x%d"
+            % (key_r, count_r, key_s, count_s),
+            "<3 identical repeats",
+            "uniform card grid repeats one token")
+    families = []
+    for body, offset in iter_blocks(text):
+        for name, value, _ in parse_decls(body, offset, liner):
+            if name == "font-family":
+                families.append(value)
+    stacked = " ".join(families).lower()
+    if (("inter" in stacked or "system-ui" in stacked)
+            and "@font-face" not in text.lower() and families):
+        add(rows, rel, 1, "system-font-only", families[0],
+            "custom @font-face", "default Inter/system-ui stack, no font face")
+    masked = mask_comments(text)
+    literals = len(HEX_RE.findall(masked)) + len(RGB_RE.findall(masked))
+    if literals >= 3 and text.lower().count("var(") == 0 and text.strip():
+        add(rows, rel, 1, "hardcoded-palette",
+            "%d literal colors, 0 var()" % literals, ">=1 var(--*)",
+            "palette is fully hardcoded")
+
+
+def find_targets(path):
+    wanted = (".html", ".htm", ".css")
+    if os.path.isfile(path):
+        if not path.lower().endswith(wanted):
+            print("uigate: not an HTML/CSS file: %s" % path, file=sys.stderr)
+            sys.exit(2)
+        return os.path.dirname(os.path.abspath(path)), [os.path.abspath(path)]
+    if not os.path.isdir(path):
+        print("uigate: not a file or directory: %s" % path, file=sys.stderr)
+        sys.exit(2)
+    found = []
+    for dirpath, dirnames, filenames in os.walk(path):
+        dirnames.sort()
+        for name in sorted(filenames):
+            if name.lower().endswith(wanted):
+                found.append(os.path.abspath(os.path.join(dirpath, name)))
+    if not found:
+        print("uigate: no HTML/CSS files under %s" % path, file=sys.stderr)
+        sys.exit(2)
+    return os.path.abspath(path), sorted(found)
+
+
+def render(rows, files, exempt, strict, color):
+    width = min(30, max([len(r["file"]) + len(str(r["line"])) + 1
+                         for r in rows] or [8]))
+    for row in sorted(rows, key=lambda r: (r["file"], r["rule"], r["line"],
+                                           r["measured"])):
+        label = "FAIL" if row["severity"] == "fail" else "WARN"
+        codes = (RED, BOLD) if row["severity"] == "fail" else (YELLOW, BOLD)
+        where = "%s:%d" % (row["file"], row["line"])
+        print("%-*s  %s  %-20s %s  [threshold %s]  %s"
+              % (width, where, paint(label, *codes, color=color),
+                 row["rule"], row["measured"], row["threshold"],
+                 row["message"]))
+    if rows:
+        print()
+    fails = sum(1 for r in rows if r["severity"] == "fail")
+    warns = sum(1 for r in rows if r["severity"] == "warn")
+    tail = "%d file(s) checked" % files
+    if exempt:
+        tail += ", %d exempt by --allow" % exempt
+    if fails:
+        print(paint("uigate: %d failure(s), %d warning(s) across %s"
+                    % (fails, warns, tail), BOLD, RED, color=color))
+        print(paint("uigate: fix the UI -- or exempt a rule with:  "
+                    "--allow RULE=<reason>", BOLD, color=color))
+    else:
+        print(paint("uigate: ok -- %d failure(s), %d warning(s) across %s"
+                    % (fails, warns, tail), BOLD, color=color))
+    if strict and warns:
+        print(paint("uigate: --strict blocks on %d warning(s)" % warns,
+                    BOLD, RED, color=color))
+    return fails, warns
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog="uigate",
+        description="Lint local HTML/CSS for measurable UI defects "
+                    "(WCAG contrast, focus, alt, targets, text size) and "
+                    "AI-template tells. Offline, deterministic, stdlib only.")
+    parser.add_argument("path", nargs="?", default=".",
+                        help="HTML/CSS file or directory to lint (default .)")
+    parser.add_argument("--allow", action="append", default=[],
+                        metavar="RULE=reason",
+                        help="exempt one rule with a reason (repeatable)")
+    parser.add_argument("--strict", action="store_true",
+                        help="warnings block too")
+    parser.add_argument("--format", choices=("text", "json"), default="text")
+    parser.add_argument("--no-color", action="store_true")
+    args = parser.parse_args(argv)
+
+    allow = set()
+    for entry in args.allow:
+        if "=" not in entry:
+            print("uigate: --allow expects RULE=reason, got: %s" % entry,
+                  file=sys.stderr)
+            return 2
+        rule, reason = entry.split("=", 1)
+        if rule not in RULES or not reason.strip():
+            print("uigate: unknown rule or empty reason in: %s" % entry,
+                  file=sys.stderr)
+            return 2
+        allow.add(rule)
+
+    root, files = find_targets(args.path)
+    rows = []
+    css_cache = {}
+    for path in files:
+        rel = os.path.relpath(path, root).replace(os.sep, "/")
+        try:
+            with open(path, encoding="utf-8", errors="replace") as handle:
+                text = handle.read()
+        except OSError as exc:
+            print("uigate: cannot read %s: %s" % (rel, exc), file=sys.stderr)
+            return 2
+        if path.lower().endswith(".css"):
+            audit_css_file(path, rel, text, rows)
+        else:
+            audit_html(path, rel, text, rows, css_cache)
+
+    kept = [r for r in rows if r["rule"] not in allow]
+    exempt = len(rows) - len(kept)
+    rows = kept
+    fails = sum(1 for r in rows if r["severity"] == "fail")
+    warns = sum(1 for r in rows if r["severity"] == "warn")
+    ok = fails == 0 and not (args.strict and warns > 0)
+
+    if args.format == "json":
+        print(json.dumps(
+            {"ok": ok, "counts": {"fail": fails, "warn": warns,
+                                  "exempt": exempt, "files": len(files)},
+             "findings": sorted(
+                 rows, key=lambda r: (r["file"], r["rule"], r["line"],
+                                      r["measured"]))}, indent=2))
+    else:
+        render(rows, len(files), exempt, args.strict, not args.no_color)
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
