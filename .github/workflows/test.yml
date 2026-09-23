@@ -23,3 +23,8 @@ jobs:
           python scripts/uigate examples/red/index.html --no-color || test $? -eq 1
       - name: the clean example must pass
         run: python scripts/uigate examples/clean/index.html --no-color
+      - name: showcase pages must gate strict-clean
+        run: |
+          for d in examples/showcase/*/; do
+            python scripts/uigate "$d/index.html" --strict --no-color
+          done

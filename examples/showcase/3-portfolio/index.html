@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atelier Nord — calm interfaces for loud industries</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Archivo:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bone:#f4f1ea; --ink:#17191a; --muted:#4a4d4e; --paper:#ffffff;
+  --rust:#9c3b1a; --moss:#3c5a37; --sand:#e7e0d2; --line:#d9d2c4;
+  --shadow-p:0 14px30px rgba(23,25,26,.14); --shadow-q:0 2px6px rgba(23,25,26,.08);
+  --ring:#9c3b1a;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bone);color:var(--ink);
+ font:400 16px/1.65 Archivo,Arial,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:0 28px}
+h1,h2,.quote{font-family:"Playfair Display",Georgia,serif;margin:0}
+nav{display:flex;align-items:center;gap:28px;padding:26px0}
+nav .mark{font-family:"Playfair Display",Georgia,serif;font-size:22px;font-weight:700;margin-right:auto}
+nav a{color:var(--ink);text-decoration:none;font-size:15px;padding:11px0;letter-spacing:.04em}
+nav a:focus-visible{outline:3px solid var(--ring);outline-offset:4px;border-radius:3px}
+.hero{padding:56px 0 40px;display:grid;grid-template-columns:1.35fr .65fr;gap:48px;align-items:end}
+.hero h1{font-size:64px;font-weight:700;line-height:1.06}
+.hero .lede{font-size:18px;color:var(--muted);border-left:4px solid var(--rust);padding-left:18px}
+.cta{display:inline-block;margin-top:26px;background:var(--ink);color:var(--bone);
+ text-decoration:none;font-size:15px;padding:14px28px;border-radius:2px;
+ min-height:40px;letter-spacing:.05em}
+.cta:focus-visible{outline:3px solid var(--ring);outline-offset:3px}
+.work{padding:24px 0 56px}
+.work h2{font-size:30px;margin-bottom:6px}
+.work .sub{color:var(--muted);font-size:15px;margin-bottom:26px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.project{background:var(--paper);border:1px solid var(--line);border-radius:2px;
+ overflow:hidden;box-shadow:var(--shadow-q)}
+.project:nth-child(2){border-radius:10px;box-shadow:var(--shadow-p)}
+.project:nth-child(3){border-radius:18px2px2px18px;box-shadow:var(--shadow-q)}
+.thumb{height:170px;background:linear-gradient(135deg,var(--moss),#7a9a6d)}
+.project:nth-child(2) .thumb{background:linear-gradient(135deg,var(--rust),#d98b5f)}
+.project:nth-child(3) .thumb{background:linear-gradient(135deg,#2f4858,#6d93a8)}
+.project .meta{padding:18px20px22px}
+.project h3{font-family:Archivo,Arial,sans-serif;font-size:17px;margin:0 0 6px;letter-spacing:.01em}
+.project p{margin:0;font-size:14px;color:var(--muted)}
+.project .tag{display:inline-block;font-size:12px;letter-spacing:.08em;
+ text-transform:uppercase;color:var(--rust);font-weight:600;margin-bottom:8px}
+blockquote{background:var(--sand);border:0;padding:44px48px;margin:0;border-radius:14px}
+.quote{font-size:27px;line-height:1.4;font-weight:500}
+.quote cite{display:block;font-family:Archivo,Arial,sans-serif;font-style:normal;
+ font-size:14px;color:var(--muted);margin-top:16px}
+.contact{display:flex;justify-content:space-between;align-items:center;gap:24px;
+ flex-wrap:wrap;padding:52px0}
+.contact h2{font-size:34px}
+.contact a{color:var(--rust);text-decoration:none;font-weight:600;padding:10px0;
+ display:inline-block;border-bottom:2px solid var(--rust)}
+.contact a:focus-visible{outline:3px solid var(--ring);outline-offset:4px;border-radius:3px}
+footer{border-top:1px solid var(--line);padding:24px 0 40px;display:flex;
+ justify-content:space-between;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+footer a{color:var(--muted);text-decoration:none;padding:8px0;display:inline-block}
+footer a:focus-visible{outline:3px solid var(--ring);outline-offset:3px;border-radius:3px}
+@media(max-width:860px){.hero{grid-template-columns:1fr}.hero h1{font-size:44px}
+ .grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="wrap">
+<nav aria-label="Main">
+<span class="mark">Atelier Nord</span>
+<a href="#work">Work</a>
+<a href="#studio">Studio</a>
+<a href="#contact">Contact</a>
+</nav>
+</header>
+<main>
+<section class="wrap hero">
+<h1>Calm interfaces for loud industries.</h1>
+<div>
+<p class="lede">We are a two-person studio in Trondheim designing software for freight, energy and fisheries — fields where a confusing screen costs real money and real weather windows.</p>
+<a class="cta" href="#contact">Start a project</a>
+</div>
+</section>
+<section class="wrap work" id="work">
+<h2>Selected work</h2>
+<p class="sub">Three recent engagements, each shipped end to end.</p>
+<div class="grid">
+<article class="project">
+<div class="thumb" role="img" aria-label="Green-toned screenshot of the Havfrue vessel planning interface"></div>
+<div class="meta"><span class="tag">Maritime</span><h3>Havfrue — fleet planner</h3><p>Cut route planning for a12-vessel fleet from4 hours to25 minutes.</p></div>
+</article>
+<article class="project">
+<div class="thumb" role="img" aria-label="Rust-toned screenshot of the Kraftnot energy trading dashboard"></div>
+<div class="meta"><span class="tag">Energy</span><h3>Kraftnot — day-ahead desk</h3><p>A trading UI where every number shows its meter and timestamp.</p></div>
+</article>
+<article class="project">
+<div class="thumb" role="img" aria-label="Blue-toned screenshot of the Fiskline catch documentation app"></div>
+<div class="meta"><span class="tag">Fisheries</span><h3>Fiskline — catch log</h3><p>Offline-first documentation that survives wet gloves and no signal.</p></div>
+</article>
+</div>
+</section>
+<section id="studio">
+<blockquote>
+<p class="quote">"They asked what our worst week looks like before they drew a single screen. The redesign survived its first storm season without a support ticket."</p>
+<cite>— Ingrid Solheim, operations lead, Havfrue Kystlinje</cite>
+</blockquote>
+</section>
+<section class="wrap contact" id="contact">
+<h2>Tell us about your loudest screen.</h2>
+<a href="mailto:studio@atelier-nord.example">studio@atelier-nord.example</a>
+</section>
+</main>
+<footer class="wrap">
+<span>© 2026 Atelier Nord — Trondheim, Norway</span>
+<span><a href="#work">Work</a> · <a href="#studio">Studio</a> · <a href="#contact">Contact</a></span>
+</footer>
+</body>
+</html>

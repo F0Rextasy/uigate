@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pulseboard — fleet health at a glance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f4f2ec; --card:#ffffff; --ink:#1d211e; --muted:#4c524d;
+  --side:#21261f; --side-ink:#e8eadf; --side-mut:#b9bfae;
+  --good:#0f6b4a; --warn:#8a5007; --bad:#9c2b2b; --line:#e2ded2;
+  --accent:#2f6f4f; --chip-good-bg:#e2f1ea; --chip-warn-bg:#f6ecd9; --chip-bad-bg:#f6e2e2;
+  --shadow-s:0 1px 3px rgba(29,33,30,.10); --shadow-m:0 10px 28px rgba(29,33,30,.12);
+  --ring:#2f6f4f;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+ font:400 15px/1.55 "IBM Plex Sans",Arial,sans-serif;display:flex;min-height:100vh}
+aside{width:232px;background:var(--side);color:var(--side-ink);padding:24px18px;flex-shrink:0}
+aside .logo{font-family:"IBM Plex Mono",monospace;font-size:19px;line-height:1.2;
+ font-weight:600;letter-spacing:.02em;margin-bottom:28px}
+aside nav{display:flex;flex-direction:column;gap:4px}
+aside nav a{color:var(--side-ink);text-decoration:none;padding:11px12px;border-radius:8px;
+ font-size:15px;min-height:40px}
+aside nav a:hover{background:#2c332a}
+aside nav a[aria-current]{background:#34503d;color:#ffffff}
+aside nav a:focus-visible{outline:3px solid #8fd0b0;outline-offset:2px}
+aside .quota{margin-top:28px;font-size:13px;color:var(--side-mut);
+ border-top:1px solid #3a4137;padding-top:16px}
+main{flex:1;padding:28px36px48px;max-width:1120px}
+.topbar{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+.topbar h1{font-family:"IBM Plex Sans",Arial,sans-serif;font-size:26px;line-height:1.2;
+ font-weight:600;margin:0 auto}
+.filter{font-size:14px;padding:10px16px;min-height:40px;border:1px solid var(--line);
+ background:var(--card);color:var(--ink);border-radius:8px;cursor:pointer}
+.filter[aria-pressed]{background:var(--accent);border-color:var(--accent);color:#ffffff}
+.filter:focus-visible{outline:3px solid var(--ring);outline-offset:2px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;
+ box-shadow:var(--shadow-s)}
+.tile:nth-child(2){border-radius:6px}
+.tile:nth-child(3){border-radius:14px;box-shadow:var(--shadow-m)}
+.tile .label{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.tile .value{font-family:"IBM Plex Mono",monospace;font-size:30px;line-height:1.1;
+ font-weight:600;margin:8px06px}
+.chip{display:inline-block;font-size:13px;padding:3px10px;border-radius:99px;font-weight:600}
+.chip.good{background:var(--chip-good-bg);color:var(--good)}
+.chip.warn{background:var(--chip-warn-bg);color:var(--warn)}
+.chip.bad{background:var(--chip-bad-bg);color:var(--bad)}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:22px;
+ box-shadow:var(--shadow-s);margin-bottom:20px}
+.panel h2{font-size:17px;margin:0 0 14px}
+.chart{display:flex;align-items:flex-end;gap:10px;height:160px;padding-top:8px}
+.bar{flex:1;background:var(--accent);border-radius:6px 6px 0 0;position:relative;min-width:18px}
+.bar.today{background:var(--warn)}
+.bar span{position:absolute;top:-22px;left:50%;transform:translateX(-50%);
+ font-family:"IBM Plex Mono",monospace;font-size:13px;font-weight:600;line-height:1;color:var(--muted)}
+.bar em{position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);
+ font-size:13px;line-height:1;color:var(--muted);font-style:normal}
+.chart-caption{margin-top:30px;font-size:13px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:11px10px;border-bottom:1px solid var(--line)}
+th{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td code{font-family:"IBM Plex Mono",monospace;font-size:13px}
+tr:last-child td{border-bottom:0}
+@media(max-width:980px){.tiles{grid-template-columns:repeat(2,1fr)}
+ body{flex-direction:column}aside{width:100%}}
+</style>
+</head>
+<body>
+<aside>
+<div class="logo">pulseboard</div>
+<nav aria-label="Sections">
+<a href="#overview" aria-current="page">Overview</a>
+<a href="#latency">Latency</a>
+<a href="#incidents">Incidents</a>
+<a href="#deploys">Deploys</a>
+<a href="#settings">Settings</a>
+</nav>
+<p class="quota">Region: eu-central · sampling100% · refreshed30s ago</p>
+</aside>
+<main>
+<div class="topbar">
+<h1 id="overview">Fleet health — week38</h1>
+<button class="filter" aria-pressed="true" type="button">7d</button>
+<button class="filter" aria-pressed="false" type="button">30d</button>
+<button class="filter" aria-pressed="false" type="button">Quarter</button>
+</div>
+<section class="tiles" aria-label="Key metrics">
+<div class="tile"><div class="label">Uptime</div><div class="value">99.95%</div><span class="chip good">within SLO</span></div>
+<div class="tile"><div class="label">p95 latency</div><div class="value">184ms</div><span class="chip good">−21ms WoW</span></div>
+<div class="tile"><div class="label">Error rate</div><div class="value">0.42%</div><span class="chip warn">watch checkout</span></div>
+<div class="tile"><div class="label">Queue depth</div><div class="value">23</div><span class="chip bad">drain &gt;5min</span></div>
+</section>
+<section class="panel" id="latency">
+<h2>Requests per minute — last14 deploys</h2>
+<div class="chart" role="img" aria-label="Bar chart of requests per minute across the last fourteen deploys, ranging from2,100 to4,800, with the current deploy at3,950">
+<div class="bar" style="height:52%"><span>2.1k</span><em>d-13</em></div>
+<div class="bar" style="height:61%"><span>2.5k</span><em>d-12</em></div>
+<div class="bar" style="height:58%"><span>2.4k</span><em>d-11</em></div>
+<div class="bar" style="height:74%"><span>3.0k</span><em>d-10</em></div>
+<div class="bar" style="height:70%"><span>2.8k</span><em>d-9</em></div>
+<div class="bar" style="height:83%"><span>3.4k</span><em>d-8</em></div>
+<div class="bar" style="height:96%"><span>4.0k</span><em>d-7</em></div>
+<div class="bar" style="height:100%"><span>4.8k</span><em>d-6</em></div>
+<div class="bar" style="height:88%"><span>3.6k</span><em>d-5</em></div>
+<div class="bar" style="height:79%"><span>3.2k</span><em>d-4</em></div>
+<div class="bar" style="height:92%"><span>3.8k</span><em>d-3</em></div>
+<div class="bar" style="height:86%"><span>3.5k</span><em>d-2</em></div>
+<div class="bar" style="height:91%"><span>3.7k</span><em>d-1</em></div>
+<div class="bar today" style="height:97%"><span>3.9k</span><em>now</em></div>
+</div>
+<p class="chart-caption">Peak coincided with the d-6 import job; the amber bar is the deploy currently rolling out.</p>
+</section>
+<section class="panel" id="incidents">
+<h2>Open incidents</h2>
+<table>
+<thead><tr><th>Service</th><th>Signal</th><th>Since</th><th>Owner</th><th>State</th></tr></thead>
+<tbody>
+<tr><td><code>checkout-api</code></td><td>error rate &gt;0.4% for12min</td><td>09:41</td><td>platform</td><td><span class="chip warn">investigating</span></td></tr>
+<tr><td><code>event-queue</code></td><td>drain time &gt;5min</td><td>09:52</td><td>data</td><td><span class="chip bad">mitigating</span></td></tr>
+<tr><td><code>search-index</code></td><td>stale replicas (2/6)</td><td>08:15</td><td>discovery</td><td><span class="chip good">resolved</span></td></tr>
+</tbody>
+</table>
+</section>
+</main>
+</body>
+</html>

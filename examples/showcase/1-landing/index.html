@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledgerline — invoice truth for small studios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Public+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#faf7f0; --ink:#20241f; --muted:#4d534c;
+  --accent:#0d6e56; --accent-ink:#ffffff; --amber:#9a5307; --line:#e3ddd0;
+  --card-a:#ffffff; --card-b:#f1ede3; --shadow-a:0 1px 2px rgba(32,36,31,.08);
+  --shadow-b:0 8px 24px rgba(32,36,31,.10); --ring:#0d6e56; --band-ink:#cfcabf;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);
+ font:400 16px/1.6 "Public Sans",Arial,sans-serif}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+h1,h2{font-family:Fraunces,Georgia,serif;line-height:1.15;margin:0}
+nav{display:flex;gap:24px;align-items:center;padding:18px0}
+nav .brand{font-family:Fraunces,Georgia,serif;font-weight:650;font-size:20px;margin-right:auto}
+nav a{color:var(--ink);text-decoration:none;padding:11px0;font-size:15px}
+nav a:focus-visible{outline:3px solid var(--ring);outline-offset:3px;border-radius:4px}
+.btn{display:inline-block;font-size:15px;padding:12px24px;border-radius:10px;
+ background:var(--accent);color:var(--accent-ink);text-decoration:none;min-height:40px}
+.btn:focus-visible{outline:3px solid var(--ring);outline-offset:3px;border-radius:6px}
+.btn.ghost{background:transparent;color:var(--accent);border:2px solid var(--accent)}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:48px;padding:64px 0 48px;align-items:center}
+.hero h1{font-size:52px;font-weight:650}
+.hero p{font-size:18px;color:var(--muted);margin:20px 0 28px;max-width:46ch}
+.ctas{display:flex;gap:14px;flex-wrap:wrap}
+.receipt{background:var(--card-a);border:1px solid var(--line);border-radius:14px;
+ box-shadow:var(--shadow-b);padding:24px;font-size:14px}
+.receipt .row{display:flex;justify-content:space-between;gap:16px;padding:10px0;
+ border-bottom:1px dashed var(--line)}
+.receipt .row:last-child{border-bottom:0;font-weight:600}
+.facts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:8px 0 56px}
+.fact{background:var(--card-b);border:1px solid var(--line);border-radius:8px;padding:22px}
+.fact:nth-child(2){border-radius:16px;box-shadow:var(--shadow-a)}
+.fact:nth-child(3){border-radius:4px;box-shadow:var(--shadow-b)}
+.fact h2{font-size:17px;font-family:"Public Sans",Arial,sans-serif;font-weight:600;margin-bottom:8px}
+.fact p{margin:0;font-size:15px;color:var(--muted)}
+.kicker{font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);font-weight:600}
+.band{background:var(--ink);color:var(--paper);border-radius:18px;padding:36px40px;
+ margin:56px0;display:flex;gap:40px;justify-content:space-between;flex-wrap:wrap}
+.band strong{font-family:Fraunces,Georgia,serif;font-size:34px;font-weight:650;display:block}
+.band span{font-size:14px;color:var(--band-ink)}
+footer{border-top:1px solid var(--line);padding:28px 0 48px;font-size:14px;color:var(--muted);
+ display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px}
+footer a{color:var(--accent);text-decoration:none;padding:8px0;display:inline-block}
+footer a:focus-visible{outline:3px solid var(--ring);outline-offset:3px;border-radius:4px}
+@media(max-width:760px){.hero{grid-template-columns:1fr}.facts{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header class="wrap">
+<nav aria-label="Main">
+<span class="brand">Ledgerline</span>
+<a href="#facts">Why studios switch</a>
+<a href="#numbers">Numbers</a>
+<a href="#contact">Contact</a>
+<a class="btn ghost" href="#contact">Book a walkthrough</a>
+</nav>
+</header>
+<main class="wrap">
+<section class="hero">
+<div>
+<span class="kicker">Invoice truth, not invoice vibes</span>
+<h1>Every euro accounted for, before the client asks.</h1>
+<p>Ledgerline reconciles your studio's invoices, retainers and late payers into one ledger you can defend in a meeting, with the source document one click away from every line.</p>
+<div class="ctas">
+<a class="btn" href="#contact">See a sample ledger</a>
+<a class="btn ghost" href="#facts">Read the method</a>
+</div>
+</div>
+<aside class="receipt" aria-label="Example reconciliation card">
+<div class="row"><span>Invoice #214 — Nord Atelier</span><span>€4,200.00</span></div>
+<div class="row"><span>Retainer drawn — September</span><span>€1,800.00</span></div>
+<div class="row"><span>Late fee —14 days over</span><span>€63.00</span></div>
+<div class="row"><span>Reconciled against bank feed</span><span>matched</span></div>
+<div class="row"><span>Open questions</span><span>0</span></div>
+</aside>
+</section>
+<section id="facts" class="facts">
+<article class="fact"><h2>Paper trail first</h2><p>Every figure links to the PDF, the bank line and the email that authorised it.</p></article>
+<article class="fact"><h2>Retainers that end</h2><p>Draw-down is calculated per contract clause, not per spreadsheet memory.</p></article>
+<article class="fact"><h2>Late, loudly</h2><p>Aging turns amber at day 7, red at day 14, and drafts the nudge for you.</p></article>
+</section>
+<section id="numbers" class="band">
+<div><strong>9 days</strong><span>average cut in days-sales-outstanding</span></div>
+<div><strong>0</strong><span>reconciliation questions left for Friday</span></div>
+<div><strong>100%</strong><span>of lines with a source document attached</span></div>
+</section>
+</main>
+<footer class="wrap" id="contact">
+<span>© 2026 Ledgerline — built for studios of2–20 people</span>
+<span><a href="mailto:hello@ledgerline.example">hello@ledgerline.example</a></span>
+</footer>
+</body>
+</html>

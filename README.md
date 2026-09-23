@@ -9,7 +9,13 @@
 
 **Your landing page looks like every other AI landing page, and the contrast fails WCAG anyway.** The same indigo gradient, the same Inter stack, the same 12px cards with the same shadow -- plus grey-on-white body copy at 2.85:1 that no keyboard user can even tab through. `uigate` reads your local HTML/CSS as data, puts a measured number next to every finding, and fails the build when an objective defect ships.
 
-![uigate terminal demo](assets/demo.svg)
+![uigate demo](assets/showcase.gif)
+
+**Three showcased pages (each passes `--strict`):**
+
+| Landing | Dashboard | Portfolio |
+|---|---|---|
+| ![landing](assets/showcase-1.png) | ![dashboard](assets/showcase-2.png) | ![portfolio](assets/showcase-3.png) |
 
 ## The problem is real
 

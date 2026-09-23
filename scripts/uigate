@@ -304,15 +304,31 @@ def check_contrast_block(rows, rel, line, decls):
     if foreground_rgb is None:
         return  # var() or unknown -- never vibes, skip what we cannot resolve
     background = decls.get("background-color")
-    background_token = background
-    if background is not None:
-        background_rgb = parse_color(background)
-    else:
-        background_rgb, background_token = first_color_in_value(
-            decls.get("background", ""))
-    if background_rgb is None:
+    shorthand = decls.get("background")
+    background_token = (background if background is not None
+                        else shorthand)
+    if background is None and shorthand is None:
+        # no background declared at all: the default page behind is white
         background_rgb = (255, 255, 255)
         background_token = "#ffffff (assumed)"
+    else:
+        if background is not None:
+            source = background
+            background_rgb = parse_color(background)
+        else:
+            source = shorthand
+            background_rgb, token = first_color_in_value(shorthand)
+            if token is not None:
+                background_token = token
+        if background_rgb is None:
+            if re.search(r"\b(?:transparent|none)\b", source, re.I):
+                # reveals whatever is behind -- default page is white
+                background_rgb = (255, 255, 255)
+                background_token = "#ffffff (assumed)"
+            else:
+                # declared var()/unknown background -- same contract as the
+                # foreground: skip what we cannot resolve, never vibes
+                return
     size = (font_size_px(decls["font-size"])
             if "font-size" in decls else None)
     large = (size is not None

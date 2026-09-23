@@ -206,6 +206,28 @@ class UigateContract(unittest.TestCase):
             self.assertIn("exempt", out)
             self.assertIn("ok --", out)
 
+    def test_var_background_is_skipped_not_assumed(self):
+        # A literal foreground over an unresolvable var() background must be
+        # skipped, never measured against an assumed white page (the false
+        # positive that failed white-on-brand-color buttons).
+        with tempfile.TemporaryDirectory() as tmp:
+            var_page = write_page(
+                tmp,
+                styled(":root { --brand: #0d6e56; }\n"
+                       "button { color: #ffffff; background: var(--brand); "
+                       "font-size: 16px; }", "<button>Go</button>"),
+                "var.html")
+            _, data = findings_json(var_page)
+            self.assertNotIn("low-contrast", rule_map(data))
+            # the measuring path stays armed: a failing literal still fires
+            fail_page = write_page(
+                tmp,
+                styled("button { color: #777777; background: #ffffff; "
+                       "font-size: 16px; }", "<button>Go</button>"),
+                "fail.html")
+            _, data = findings_json(fail_page)
+            self.assertIn("low-contrast", rule_map(data))
+
     def test_strict_blocks_on_warns(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = write_page(tmp, CLEAN_PAGE)
