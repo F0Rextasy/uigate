@@ -161,6 +161,15 @@ exit 1, and the clean fixture must exit 0.
   WCAG reference numbers; the tells are labeled heuristics with the
   exact token printed (`#6366f1 + #8b5cf6`, not "feels generated").
 
+## How it compares
+
+*Caption: A11y/design gates -- axe drives a browser at a URL; uigate reads the bytes you committed.*
+
+|tool|install|offline?|what it measures|CI exit / key caveat|
+|---|---|---|---|---|
+|**uigate** (ours)|`npx skills add F0Rextasy/uigate`|Yes -- local files only|WCAG contrast math on literal colors plus disclosed AI-template tells (gradient, card grid, boilerplate)|Exit 1 on any finding over threshold; measured value printed next to every rule|
+|**axe-core CLI**|`npm i -g @axe-core/cli` (v4.13.0)|No -- drives a headless browser against a URL|W3C-backed a11y rules, including color-contrast|Exits `1` on violations only with opt-in `-q`/`--exit` (default exit `0` even with findings); `file://` URLs pass through untouched -- a CI gate must pass `-q`|
+
 ## One path, many gates — the family
 
 | Repo | What its verdict means |
