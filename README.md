@@ -161,7 +161,7 @@ exit 1, and the clean fixture must exit 0.
   WCAG reference numbers; the tells are labeled heuristics with the
   exact token printed (`#6366f1 + #8b5cf6`, not "feels generated").
 
-## One path, many gates - the family
+## One path, many gates — the family
 
 | Repo | What its verdict means |
 | --- | ---|
@@ -176,9 +176,10 @@ exit 1, and the clean fixture must exit 0.
 | [testgate](https://github.com/F0Rextasy/testgate) | the tests that ran are the tests that exist - gaps, dupes, skips |
 | [bandaid](https://github.com/F0Rextasy/bandaid) | the diff doesn't hide a silent failure - swallowed errors, dead guards |
 | [wincompat](https://github.com/F0Rextasy/wincompat) | every path in the tree survives a Windows checkout |
-| [compressproof](https://github.com/F0Rextasy/compressproof) | the context shrank without losing an answer — reversible compression, byte proof, answer-equivalence oracle |
-| [uigate](https://github.com/F0Rextasy/uigate) | the UI stops looking like the same AI slop — measurable design-slop lint, WCAG + template tells |
-| [aitell](https://github.com/F0Rextasy/aitell) | the prose stops reading as AI — deterministic AI-tell detection with a published confusion matrix |
+| [compressproof](https://github.com/F0Rextasy/compressproof) | the context shrank without losing an answer - reversible compression, byte proof, answer-equivalence oracle |
+| [uigate](https://github.com/F0Rextasy/uigate) | the UI stops looking like the same AI slop - measurable design-slop lint, WCAG + template tells |
+| [aitell](https://github.com/F0Rextasy/aitell) | the prose stops reading as AI - deterministic AI-tell detection with a published confusion matrix |
+| [route-drift](https://github.com/F0Rextasy/route-drift) | OpenAPI spec vs code routes drift gate |
 
 MIT licensed. New slop patterns welcome - attach the markup snippet
 and the measured value it should print.
